@@ -1,0 +1,203 @@
+﻿using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.Model.Enum;
+using BetterGenshinImpact.Service.Interface;
+using BetterGenshinImpact.View.Pages;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Service.Notification;
+using BetterGenshinImpact.Service.Notifier;
+using BetterGenshinImpact.View;
+using Wpf.Ui;
+using Wpf.Ui.Controls;
+using Wpf.Ui.Violeta.Controls;
+
+namespace BetterGenshinImpact.ViewModel.Pages;
+
+public partial class CommonSettingsPageViewModel : ObservableObject, INavigationAware, IViewModel
+{
+    public AllConfig Config { get; set; }
+
+    private readonly INavigationService _navigationService;
+
+    private readonly NotificationService _notificationService;
+
+    [ObservableProperty]
+    private bool _isLoading;
+
+    [ObservableProperty]
+    private string _webhookStatus = string.Empty;
+
+
+    public CommonSettingsPageViewModel(IConfigService configService, INavigationService navigationService, NotificationService notificationService)
+    {
+        Config = configService.Get();
+        _navigationService = navigationService;
+        _notificationService = notificationService;
+    }
+
+    public void OnNavigatedTo()
+    {
+    }
+
+    public void OnNavigatedFrom()
+    {
+    }
+
+    [RelayCommand]
+    public void OnRefreshMaskSettings()
+    {
+        WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(this, "RefreshSettings", new object(), "重新计算控件位置"));
+    }
+
+    [RelayCommand]
+    private void OnSwitchMaskEnabled()
+    {
+        // if (Config.MaskWindowConfig.MaskEnabled)
+        // {
+        //     MaskWindow.Instance().Show();
+        // }
+        // else
+        // {
+        //     MaskWindow.Instance().Hide();
+        // }
+    }
+
+    [RelayCommand]
+    public void OnGoToHotKeyPage()
+    {
+        _navigationService.Navigate(typeof(HotKeyPage));
+    }
+
+    [RelayCommand]
+    public void OnSwitchTakenScreenshotEnabled()
+    {
+        if (Config.CommonConfig.ScreenshotEnabled)
+        {
+            if (TaskTriggerDispatcher.Instance().GetCacheCaptureMode() == DispatcherCaptureModeEnum.NormalTrigger)
+            {
+                TaskTriggerDispatcher.Instance().SetCacheCaptureMode(DispatcherCaptureModeEnum.CacheCaptureWithTrigger);
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void OnGoToFolder()
+    {
+        var path = Global.Absolute(@"log\screenshot\");
+        if (!Directory.Exists(path))
+        {
+            Directory.CreateDirectory(path);
+        }
+
+        Process.Start("explorer.exe", path);
+    }
+
+    [RelayCommand]
+    public void OnGoToLogFolder()
+    {
+        var path = Global.Absolute(@"log");
+        if (!Directory.Exists(path))
+        {
+            Directory.CreateDirectory(path);
+        }
+
+        Process.Start("explorer.exe", path);
+    }
+
+    [RelayCommand]
+    private async Task OnTestWebhook()
+    {
+        IsLoading = true;
+        WebhookStatus = string.Empty;
+
+        var res = await _notificationService.TestNotifierAsync<WebhookNotifier>();
+
+        WebhookStatus = res.Message;
+
+        IsLoading = false;
+    }
+
+    [RelayCommand]
+    private async Task OnTestWindowsUwpNotification()
+    {
+        var res = await _notificationService.TestNotifierAsync<WindowsUwpNotifier>();
+        if(res.IsSuccess)
+        {
+            Toast.Success(res.Message);
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+    
+    [RelayCommand]
+    private async Task OnTestFeishuNotification()
+    {
+        var res = await _notificationService.TestNotifierAsync<FeishuNotifier>();
+        if(res.IsSuccess)
+        {
+            Toast.Success(res.Message);
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+    
+    [RelayCommand]
+    private async Task OnTestWorkWeixinNotification()
+    {
+        var res = await _notificationService.TestNotifierAsync<WorkWeixinNotifier>();
+        if(res.IsSuccess)
+        {
+            Toast.Success(res.Message);
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+    
+    [RelayCommand]
+    private void ImportLocalScriptsRepoZip()
+    {
+        Directory.CreateDirectory(ScriptRepoUpdater.ReposPath);
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Zip Files (*.zip)|*.zip",
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var zipPath = dialog.FileName;
+            // 删除旧文件夹
+            if (Directory.Exists(ScriptRepoUpdater.CenterRepoPath))
+            {
+                DirectoryHelper.DeleteReadOnlyDirectory(ScriptRepoUpdater.CenterRepoPath);
+            }
+            ZipFile.ExtractToDirectory(zipPath, ScriptRepoUpdater.ReposPath, true);
+            
+            if (Directory.Exists(ScriptRepoUpdater.CenterRepoPath))
+            {
+                MessageBox.Information("脚本仓库离线包导入成功！");
+            }
+            else
+            {
+                MessageBox.Error("脚本仓库离线包导入失败，不正确的脚本仓库离线包内容！");
+                DirectoryHelper.DeleteReadOnlyDirectory(ScriptRepoUpdater.ReposPath);
+            }
+        }
+    }
+}
