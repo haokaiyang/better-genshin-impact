@@ -1,0 +1,51 @@
+name: Update TCG Character Card Data
+run-name: "Update TCG Character Card Data"
+
+on:
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  update_tcg_character:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout genshin-data repository
+        uses: actions/checkout@v4
+        with:
+          repository: dvaJi/genshin-data
+          path: genshin-data
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Execute Python script to update TCG data
+        run: |
+          python .github/workflows/update_tcg_character.py
+          echo "✅ TCG 角色卡牌数据已更新"
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --exit-code BetterGenshinImpact/GameTask/AutoGeniusInvokation/Assets/tcg_character_card.json || echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add BetterGenshinImpact/GameTask/AutoGeniusInvokation/Assets/tcg_character_card.json
+          git commit -m "chore: update TCG character card data from genshin-data"
+          git push
+          echo "✅ 更改已提交并推送"
+
+      - name: No changes detected
+        if: steps.check_changes.outputs.has_changes != 'true'
+        run: |
+          echo "ℹ️ 没有检测到数据变化，无需更新"
